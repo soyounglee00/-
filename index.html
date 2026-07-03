@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>광고 인벤토리 대시보드</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #000000;
+      --surface: #0d0d0f;
+      --surface2: #18181b;
+      --border: #27272a;
+      --accent: #3b82f6;
+      --accent2: #06b6d4;
+      --accent3: #8b5cf6;
+      --danger: #ef4444;
+      --warn: #f59e0b;
+      --ok: #10b981;
+      --text: #f4f4f5;
+      --muted: #71717a;
+      --sub: #a1a1aa;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Pretendard', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .mono { font-family: 'DM Mono', monospace; }
+
+    /* Upload Zone */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      background: var(--surface);
+      border-radius: 16px;
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(59,130,246,0.06);
+    }
+
+    /* Stat Card */
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 24px;
+      transition: transform 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); }
+
+    /* Table */
+    .inv-table { border-collapse: collapse; width: 100%; }
+    .inv-table th {
+      background: var(--surface2);
+      color: var(--sub);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 12px 16px;
+      text-align: left;
+    }
+    .inv-table td {
+      padding: 13px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 13.5px;
+      color: var(--text);
+    }
+    .inv-table tr:hover td { background: rgba(255,255,255,0.025); }
+
+    /* Progress Bar */
+    .prog-track {
+      height: 6px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+      width: 100px;
+    }
+    .prog-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.6s ease;
+    }
+
+    /* Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-ok   { background: rgba(16,185,129,0.12); color: var(--ok); }
+    .badge-warn { background: rgba(245,158,11,0.12); color: var(--warn); }
+    .badge-danger{ background: rgba(239,68,68,0.12); color: var(--danger); }
+
+    /* Chart container */
+    .chart-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+    }
+
+    /* Tabs */
+    .tab-btn {
+      padding: 7px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .tab-btn:not(.active):hover { color: var(--text); background: var(--surface2); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    /* Glow accent line */
+    .glow-line {
+      height: 3px;
+      border-radius: 99px;
+      background: linear-gradient(90deg, #52525b, transparent);
+    }
+
+    /* Fade-in animation */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-up { animation: fadeUp 0.45s ease forwards; }
+
+    /* Tooltip */
+    .tooltip { position: relative; }
+    .tooltip .tip {
+      display: none;
+      position: absolute;
+      bottom: 125%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      border: 1px solid var(--border);
+      color: var(--sub);
+      font-size: 11px;
+      padding: 5px 10px;
+      border-radius: 7px;
+      white-space: nowrap;
+      z-index: 50;
+    }
+    .tooltip:hover .tip { display: block; }
+
+    /* Period selector */
+    .period-btn {
+      padding: 5px 12px;
+      font-size: 12px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--sub);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .period-btn.active {
+      border-color: var(--accent2);
+      color: var(--accent2);
+      background: rgba(6,182,212,0.08);
+    }
+    .period-btn:not(.active):hover { border-color: var(--muted); color: var(--text); }
+
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      background: #1e293b;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s;
+      z-index: 999;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header style="border-bottom: 1px solid var(--border); background: var(--surface);">
+  <div style="max-width:1280px; margin:0 auto; padding:0 32px; height:60px; display:flex; align-items:center; justify-content:space-between;">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div style="width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,#3f3f46,#18181b); border:1px solid #52525b; display:flex; align-items:center; justify-content:center;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      </div>
+      <span style="font-weight:700; font-size:16px; letter-spacing:-0.02em;">Ad Inventory <span style="color:var(--sub);">Dashboard</span></span>
+    </div>
+    <div id="headerMeta" style="display:none; align-items:center; gap:16px; font-size:12px; color:var(--muted);">
+      <span id="headerDate" class="mono"></span>
+      <span id="headerCount" style="padding:3px 10px; border-radius:99px; background:rgba(59,130,246,0.1); color:var(--accent); font-weight:600;"></span>
+    </div>
+  </div>
+</header>
+
+<main style="max-width:1280px; margin:0 auto; padding:40px 32px;">
+
+  <!-- UPLOAD SECTION -->
+  <section id="uploadSection">
+    <div style="text-align:center; margin-bottom:36px;">
+      <h1 style="font-size:32px; font-weight:800; letter-spacing:-0.03em; margin-bottom:10px;">
+        광고 인벤토리 현황 분석
+      </h1>
+      <p style="color:var(--sub); font-size:14px;">CSV 파일을 업로드하면 index별 노출 추이와 전월 대비 변화, 상품별 추가 여력을 자동으로 분석합니다.</p>
+    </div>
+
+    <div class="upload-zone" id="dropZone" style="max-width:600px; margin:0 auto; padding:52px 32px; text-align:center;"
+         onclick="document.getElementById('csvInput').click()">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 18px;">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <p style="font-weight:700; font-size:16px; margin-bottom:8px;">CSV 파일을 드래그하거나 클릭해서 업로드</p>
+      <p style="color:var(--muted); font-size:13px; margin-bottom:20px;">날짜, 캠페인 템플릿, index, 매체집행금액, 노출수 컬럼이 포함된 파일</p>
+      <div style="display:inline-flex; align-items:center; gap:8px; padding:8px 20px; border:1px solid var(--border); border-radius:8px; font-size:12px; color:var(--sub);">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        .csv 파일만 지원
+      </div>
+      <input type="file" id="csvInput" accept=".csv" style="display:none"/>
+    </div>
+
+    <!-- 컬럼 가이드 -->
+    <div style="max-width:600px; margin:24px auto 0; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 22px;">
+      <p style="font-size:12px; font-weight:600; color:var(--sub); margin-bottom:12px; text-transform:uppercase; letter-spacing:0.07em;">필수 컬럼 형식</p>
+      <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px;">
+        <div style="text-align:center; padding:8px; background:var(--surface2); border-radius:8px; font-size:11px; color:var(--accent2); font-weight:600;" class="mono">날짜</div>
+        <div style="text-align:center; padding:8px; background:var(--surface2); border-radius:8px; font-size:11px; color:var(--accent2); font-weight:600;" class="mono">캠페인 템플릿</div>
+        <div style="text-align:center; padding:8px; background:var(--surface2); border-radius:8px; font-size:11px; color:var(--accent); font-weight:600;" class="mono">index</div>
+        <div style="text-align:center; padding:8px; background:var(--surface2); border-radius:8px; font-size:11px; color:var(--accent2); font-weight:600;" class="mono">매체집행금액</div>
+        <div style="text-align:center; padding:8px; background:var(--surface2); border-radius:8px; font-size:11px; color:var(--accent2); font-weight:600;" class="mono">노출수</div>
+      </div>
+      <p style="margin-top:12px; font-size:11.5px; color:var(--muted);">* 헤더 행은 자동 감지됩니다. 숫자 컬럼의 쉼표(,)는 자동으로 제거됩니다.</p>
+    </div>
+
+    <!-- 총 인벤토리 입력 제거됨: 평균 기반 분석으로 대체. 하위 코드 호환을 위한 hidden 값(0 = 미사용) -->
+    <input id="totalInventoryInput" type="hidden" value="0"/>
+  </section>
+
+  <!-- DASHBOARD SECTION (hidden until data loaded) -->
+  <section id="dashSection" style="display:none;">
+
+    <!-- Top bar -->
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; flex-wrap:wrap; gap:12px;">
+      <div>
+        <h2 style="font-size:20px; font-weight:800; letter-spacing:-0.02em; margin-bottom:2px;">인벤토리 현황 분석</h2>
+        <p id="dataRange" style="font-size:12px; color:var(--muted);"></p>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <!-- Month selector -->
+        <select id="monthSelect" onchange="onMonthChange()"
+          style="background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:7px 12px; font-size:12px; outline:none; font-family:'DM Mono',monospace; cursor:pointer;">
+          <option value="all">전체 월</option>
+        </select>
+        <!-- Period filter -->
+        <div style="display:flex; gap:6px;" id="periodBtns">
+          <button class="period-btn active" data-period="all">전체</button>
+          <button class="period-btn" data-period="7">최근 7일</button>
+          <button class="period-btn" data-period="14">최근 14일</button>
+          <button class="period-btn" data-period="30">최근 30일</button>
+        </div>
+        <button onclick="resetUpload()" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--sub); font-size:12px; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.color='var(--text)'; this.style.borderColor='var(--muted)';" onmouseout="this.style.color='var(--sub)'; this.style.borderColor='var(--border)';">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.57"/></svg>
+          새 파일 업로드
+        </button>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div id="kpiCards" style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px;"></div>
+
+    <!-- Charts Row: 누적 노출수 추이 + 노출수 비중 -->
+    <div style="display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:24px;">
+      <div class="chart-box">
+        <p style="font-size:13px; font-weight:700; margin-bottom:20px;">index별 누적 노출수 추이 <span style="color:var(--muted); font-weight:400; font-size:11px;">(당월)</span></p>
+        <div style="height:240px; position:relative;"><canvas id="trendChart"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <p style="font-size:13px; font-weight:700; margin-bottom:20px;">index별 노출수 비중</p>
+        <div style="height:240px; position:relative;"><canvas id="budgetChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- index별 노출 상위 20 (별도 행) -->
+    <div class="chart-box" style="margin-bottom:24px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+        <p style="font-size:13px; font-weight:700;">index별 노출 상위 20 <span style="color:var(--muted); font-weight:400; font-size:11px;">(최근 30일)</span></p>
+        <div style="display:flex; gap:6px;" id="chartTypeBtns">
+          <button class="tab-btn active" data-chart="bar">Bar</button>
+          <button class="tab-btn" data-chart="horizontal">Horizontal</button>
+        </div>
+      </div>
+      <canvas id="burnChart" height="150"></canvas>
+    </div>
+
+    <!-- 일별 노출수 트렌드 (대분류 버튼 필터) -->
+    <div class="chart-box" style="margin-bottom:24px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+        <div>
+          <p style="font-size:13px; font-weight:700;">일별 노출수 트렌드 <span style="color:var(--muted); font-weight:400; font-size:11px;">(최근 30일)</span></p>
+          <p style="font-size:11px; color:var(--muted); margin-top:3px;">대분류 버튼을 눌러 선택/해제할 수 있습니다 (중복 선택 가능). 미선택 시 전체 합산.</p>
+        </div>
+        <div id="dailyCatBtns" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+      </div>
+      <canvas id="dailyChart" height="150"></canvas>
+    </div>
+
+    <!-- 요일별 평균 노출 추이 -->
+    <div class="chart-box" style="margin-bottom:24px;">
+      <div style="margin-bottom:16px;">
+        <p style="font-size:13px; font-weight:700;">요일별 평균 노출 추이 <span style="color:var(--muted); font-weight:400; font-size:11px;">(최근 30일 기준)</span></p>
+        <p style="font-size:11px; color:var(--muted); margin-top:3px;">각 요일에 발생한 일별 노출수의 평균값입니다. 대분류 버튼으로 선택/해제할 수 있습니다 (중복 선택 가능).</p>
+        <div id="weekdayCatBtns" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:12px;"></div>
+      </div>
+      <canvas id="weekdayChart" height="150"></canvas>
+      <div id="weekdayStats" style="display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin-top:18px;"></div>
+    </div>
+
+    <!-- 전월 대비 상품별 노출 변화 -->
+    <div class="chart-box" style="margin-bottom:24px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; gap:10px;">
+        <div>
+          <p style="font-size:13px; font-weight:700;">전월 대비 상품별 노출 변화</p>
+          <p id="momSubtitle" style="font-size:11px; color:var(--muted); margin-top:3px;">전월과 이번 달의 일평균 노출수를 상품별로 비교합니다.</p>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <select id="momGroupBy" onchange="renderMomChart()"
+            style="background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:7px; padding:6px 12px; font-size:12px; outline:none; font-family:'DM Mono',monospace; cursor:pointer;">
+            <option value="category">대분류별</option>
+            <option value="combo">상품(index+템플릿)별 · 상위 15</option>
+          </select>
+        </div>
+      </div>
+      <div id="momEmpty" style="display:none; text-align:center; color:var(--muted); font-size:13px; padding:40px 0;"></div>
+      <canvas id="momChart" height="220"></canvas>
+    </div>
+
+    <!-- 노출수 추가 가능 상품 -->
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:24px;">
+      <div style="padding:18px 24px; border-bottom:1px solid var(--border);">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+          <div>
+            <p style="font-size:13px; font-weight:700;">노출수 추가 가능 상품 분석 <span style="color:var(--muted); font-weight:400; font-size:11px;">(index + 템플릿 조합)</span></p>
+            <p style="font-size:11px; color:var(--muted); margin-top:3px;">요일별 여유 슬롯과 전월 대비 노출 감소분을 종합해 추가 여력을 판단합니다.</p>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;" id="capacityFilterBtns">
+            <button class="period-btn" data-cap="all">전체</button>
+            <button class="period-btn active" data-cap="available">추가 가능만</button>
+            <button class="period-btn" data-cap="full">여력 없음</button>
+          </div>
+        </div>
+        <!-- 상품 대분류 다중 선택 -->
+        <div id="categoryFilterWrap" style="display:none; align-items:center; gap:8px; margin-top:14px; flex-wrap:wrap;">
+          <span style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">상품 대분류</span>
+          <div id="categoryChips" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="inv-table" id="capacityTable">
+          <thead>
+            <tr>
+              <th>INDEX</th>
+              <th class="capCatCol">대분류</th>
+              <th>캠페인 템플릿</th>
+              <th>일평균 노출수</th>
+              <th class="tooltip">전월 대비<span class="tip">전월 일평균 대비 이번 달 일평균의 증감률</span></th>
+              <th class="tooltip">요일 여유<span class="tip">최고 노출 요일 대비 여유 슬롯의 합</span></th>
+              <th class="tooltip">종합 추가 여력<span class="tip">요일 여유 + 전월 대비 감소분을 합산한 추정치</span></th>
+              <th>추천 상태</th>
+            </tr>
+          </thead>
+          <tbody id="capacityBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Detail Table -->
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:12px;">
+      <div style="padding:18px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+        <p style="font-size:13px; font-weight:700;">index별 상세 현황</p>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input id="searchBox" type="text" placeholder="index 검색..."
+            style="background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:7px; padding:6px 12px; font-size:12px; outline:none; width:180px;"
+            oninput="filterTable(this.value)"
+          />
+          <button onclick="exportCSV()" style="display:flex; align-items:center; gap:6px; padding:6px 14px; border-radius:7px; border:1px solid var(--border); background:transparent; color:var(--sub); font-size:12px; cursor:pointer;" onmouseover="this.style.color='var(--text)';" onmouseout="this.style.color='var(--sub)';">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            결과 내보내기
+          </button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="inv-table" id="detailTable">
+          <thead>
+            <tr>
+              <th>INDEX</th>
+              <th>캠페인 템플릿</th>
+              <th>누적 노출수</th>
+              <th>매체집행금액</th>
+              <th>CPM</th>
+              <th id="thInventory" style="display:none;">총 인벤토리</th>
+              <th id="thRemain" style="display:none;">잔여 인벤토리</th>
+              <th>소진율</th>
+              <th>예상 소진일</th>
+              <th>상태</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 일별 index별 테이블 -->
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden;">
+      <div style="padding:18px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+        <p style="font-size:13px; font-weight:700;">일별 상세 원본 데이터</p>
+        <span id="rawCount" style="font-size:12px; color:var(--muted);"></span>
+      </div>
+      <div style="overflow-x:auto; max-height:320px; overflow-y:auto;">
+        <table class="inv-table" id="rawTable">
+          <thead>
+            <tr>
+              <th>날짜</th>
+              <th>INDEX</th>
+              <th>캠페인 템플릿</th>
+              <th>노출수</th>
+              <th>매체집행금액</th>
+            </tr>
+          </thead>
+          <tbody id="rawBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+  // ────────── Dashboard 기준 날짜 & 헬퍼 ──────────
+  const TODAY = new Date();                 // 대시보드 보는 날짜
+  const CUR_MONTH_KEY = TODAY.getFullYear() + '-' + String(TODAY.getMonth() + 1).padStart(2, '0');
+  // 최근 N일의 시작일 (오늘 포함 N일)
+  function recentCutoff(days) {
+    const d = new Date(TODAY);
+    d.setHours(0,0,0,0);
+    d.setDate(d.getDate() - (days - 1));
+    return d;
+  }
+  // 데이터를 오늘 기준 최근 N일로 필터
+  function filterRecentDays(data, days) {
+    const cutoff = recentCutoff(days);
+    return data.filter(r => { const d = new Date(r.date); return !isNaN(d) && d >= cutoff && d <= TODAY; });
+  }
+  // 특정 월(YYYY-MM)의 1일~해당일 데이터만 (동기간 비교용). dayLimit이 주어지면 그 날짜(일)까지만.
+  function filterMonthUpToDay(data, monthKey, dayLimit) {
+    return data.filter(r => {
+      if (monthKeyOf(r.date) !== monthKey) return false;
+      if (dayLimit == null) return true;
+      const day = dayOfMonth(r.date);
+      return day != null && day <= dayLimit;
+    });
+  }
+  function dayOfMonth(dateStr) {
+    const m = String(dateStr).match(/^\d{4}[-./](\d{1,2})[-./](\d{1,2})/);
+    if (m) return parseInt(m[2]);
+    const d = new Date(dateStr);
+    return isNaN(d) ? null : d.getDate();
+  }
+
+  // ────────── State ──────────
+  let rawData = [];
+  let allGrouped = {};
+  let filteredPeriod = 'all';
+  let selectedMonth = 'all';   // 'all' or 'YYYY-MM'
+  let burnChartType = 'bar';
+  let burnChartInst = null, trendChartInst = null, dailyChartInst = null, budgetChartInst = null, weekdayChartInst = null, momChartInst = null;
+  let comboData = {};          // index+template combo aggregates
+  let capacityCache = [];      // capacity analysis rows
+  let capacityFilter = 'available';   // default: 추가 가능만
+  let allCategories = [];      // distinct product categories in data
+  let selectedCategories = new Set();  // active category filters (empty = all)
+  let dailyCats = new Set();    // 일별 트렌드 대분류 버튼 선택 (empty = 전체 합산)
+  let weekdayCats = new Set();  // 요일별 추이 대분류 버튼 선택 (empty = 전체 합산)
+  let monthlyComboAvg = {};    // { comboKey: { 'YYYY-MM': {dailyAvg, totalImp, activeDays, category, index, template} } }
+  let momCurMonth = null, momPrevMonth = null;  // current & prior month keys for comparison
+
+  // ────────── Chart.js global defaults ──────────
+  Chart.defaults.color = '#71717a';
+  Chart.defaults.font.family = "'Pretendard', sans-serif";
+  Chart.defaults.font.size = 12;
+
+  // ────────── Drag & Drop ──────────
+  const dropZone = document.getElementById('dropZone');
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith('.csv')) handleFile(file);
+    else showToast('CSV 파일만 지원합니다.', 'warn');
+  });
+  document.getElementById('csvInput').addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  // ────────── File Handler (auto encoding detection) ──────────
+  function handleFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const buffer = e.target.result;                 // ArrayBuffer
+        const text = decodeBuffer(buffer);               // UTF-8 or EUC-KR auto
+        const result = parseCSV(text);
+        if (result.length === 0) { showToast('데이터가 없습니다. CSV를 확인해 주세요.', 'warn'); return; }
+        rawData = result;
+        populateMonthSelect();
+        processAndRender('all');
+        document.getElementById('uploadSection').style.display = 'none';
+        document.getElementById('dashSection').style.display = 'block';
+        document.getElementById('dashSection').classList.add('fade-up');
+        document.getElementById('headerMeta').style.display = 'flex';
+        document.getElementById('headerCount').textContent = result.length.toLocaleString() + '행 로드됨';
+        document.getElementById('headerDate').textContent = file.name;
+        showToast(result.length.toLocaleString() + '개 행 로드 완료', 'ok');
+      } catch(err) {
+        showToast('파싱 오류: ' + err.message, 'danger');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // Decode bytes: strip BOM, try UTF-8 strict, fall back to EUC-KR (한글 엑셀 기본)
+  function decodeBuffer(buffer) {
+    let bytes = new Uint8Array(buffer);
+    // UTF-8 BOM
+    if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+      bytes = bytes.subarray(3);
+      return new TextDecoder('utf-8').decode(bytes);
+    }
+    // Try strict UTF-8; if it throws, the file isn't valid UTF-8 → EUC-KR
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch (_) {
+      try {
+        return new TextDecoder('euc-kr').decode(bytes);
+      } catch (_) {
+        // last resort: lenient UTF-8
+        return new TextDecoder('utf-8').decode(bytes);
+      }
+    }
+  }
+
+  // ────────── CSV Parser ──────────
+  function parseCSV(text) {
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) throw new Error('데이터가 최소 2행 이상이어야 합니다.');
+    const rawHeaders = splitCSVLine(lines[0]).map(h => h.trim().replace(/^"|"$/g,'').trim());
+    // normalized headers: lowercase, all whitespace removed
+    const norm = rawHeaders.map(h => h.toLowerCase().replace(/\s/g, ''));
+    const colMap = {};
+
+    // Helper: pick first column matching a predicate, that isn't already taken
+    const taken = new Set();
+    function pick(target, predicate) {
+      for (let i = 0; i < norm.length; i++) {
+        if (taken.has(i)) continue;
+        if (predicate(norm[i])) { colMap[target] = i; taken.add(i); return; }
+      }
+    }
+
+    // Order matters: match the MOST specific / exact names first so that
+    // 'index' doesn't get stolen and '캠페인템플릿' isn't confused with '캠페인템플릿ID'/'캠페인ID'.
+    pick('date',       h => h === 'date' || h === '날짜' || h.includes('날짜') || h.includes('date'));
+    // 상품 대분류 (optional): match before campaign so it isn't swallowed
+    pick('category',   h => h === '상품대분류' || h === '대분류' || h.includes('대분류') || h === 'category' || h.includes('category'));
+    pick('index',      h => h === 'index' || h === '인덱스');
+    // 캠페인 템플릿: exact only (excludes 캠페인템플릿id, 캠페인, 캠페인id)
+    pick('campaign',   h => h === '캠페인템플릿' || h === 'campaigntemplate' || h === 'template' || h === '템플릿');
+    // fallback for campaign if exact template not found: a 캠페인/campaign col that is NOT an id column
+    if (colMap.campaign === undefined) {
+      pick('campaign', h => (h.includes('캠페인') || h.includes('campaign') || h.includes('template')) && !h.includes('id'));
+    }
+    pick('impression', h => h === '노출수' || h.includes('노출') || h.includes('impression'));
+    pick('budget',     h => h === '매체집행금액' || h.includes('매체집행') || h.includes('금액') || h.includes('budget') || h.includes('spend'));
+
+    const required = ['date', 'campaign', 'index', 'budget', 'impression'];
+    const labelMap = { date:'날짜', campaign:'캠페인 템플릿', index:'index', budget:'매체집행금액', impression:'노출수' };
+    const missing = required.filter(r => colMap[r] === undefined);
+    if (missing.length) {
+      throw new Error(`다음 컬럼을 찾을 수 없습니다: ${missing.map(m=>labelMap[m]).join(', ')}. (감지된 헤더: ${rawHeaders.join(' / ')})`);
+    }
+
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const cells = splitCSVLine(lines[i]).map(c => c.trim().replace(/^"|"$/g,'').trim());
+      const imp = parseNum(cells[colMap.impression]);
+      const bud = parseNum(cells[colMap.budget]);
+      rows.push({
+        date: (cells[colMap.date] || '').trim(),
+        campaign: (cells[colMap.campaign] || '').trim(),
+        index: (cells[colMap.index] || '').trim(),
+        category: colMap.category !== undefined ? (cells[colMap.category] || '').trim() : '',
+        budget: bud,
+        impression: imp
+      });
+    }
+    return rows;
+  }
+
+  function splitCSVLine(line) {
+    const result = []; let cur = ''; let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQ = !inQ; }
+      else if (line[i] === ',' && !inQ) { result.push(cur); cur = ''; }
+      else cur += line[i];
+    }
+    result.push(cur);
+    return result;
+  }
+
+  function parseNum(s) {
+    if (!s) return 0;
+    return parseFloat(String(s).replace(/,/g,'').replace(/[^0-9.\-]/g,'')) || 0;
+  }
+
+  // ────────── Filter by period ──────────
+  function filterByPeriod(data, period) {
+    if (period === 'all') return data;
+    const days = parseInt(period);
+    const dates = data.map(r => r.date).filter(Boolean).sort();
+    if (!dates.length) return data;
+    const maxDate = new Date(dates[dates.length - 1]);
+    const cutoff = new Date(maxDate);
+    cutoff.setDate(cutoff.getDate() - days + 1);
+    return data.filter(r => {
+      const d = new Date(r.date);
+      return !isNaN(d) && d >= cutoff;
+    });
+  }
+
+  // ────────── Filter by month (YYYY-MM) ──────────
+  function monthKeyOf(dateStr) {
+    // expects YYYY-MM-DD; returns YYYY-MM. Falls back to Date parsing.
+    if (!dateStr) return null;
+    const m = String(dateStr).match(/^(\d{4})[-./](\d{1,2})/);
+    if (m) return m[1] + '-' + String(m[2]).padStart(2, '0');
+    const d = new Date(dateStr);
+    if (isNaN(d)) return null;
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+
+  function filterByMonth(data, month) {
+    if (month === 'all') return data;
+    return data.filter(r => monthKeyOf(r.date) === month);
+  }
+
+  // combined: month first, then period (period operates within the selected month)
+  function applyFilters(data) {
+    return filterByPeriod(filterByMonth(data, selectedMonth), filteredPeriod);
+  }
+
+  // ────────── Month Selector ──────────
+  function populateMonthSelect() {
+    const sel = document.getElementById('monthSelect');
+    const months = Array.from(new Set(rawData.map(r => monthKeyOf(r.date)).filter(Boolean))).sort();
+    sel.innerHTML = '<option value="all">전체 월</option>' +
+      months.map(m => {
+        const [y, mo] = m.split('-');
+        return `<option value="${m}">${y}년 ${parseInt(mo)}월</option>`;
+      }).join('');
+    // 디폴트: 대시보드 보는 날짜의 당월. 데이터에 당월이 없으면 가장 최근 월.
+    if (months.includes(CUR_MONTH_KEY)) selectedMonth = CUR_MONTH_KEY;
+    else if (months.length) selectedMonth = months[months.length - 1];
+    else selectedMonth = 'all';
+    sel.value = selectedMonth;
+  }
+
+  function onMonthChange() {
+    selectedMonth = document.getElementById('monthSelect').value;
+    // reset period to 전체 when switching months (period is relative within the month)
+    filteredPeriod = 'all';
+    document.querySelectorAll('#periodBtns .period-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.period === 'all'));
+    processAndRender('all');
+  }
+
+  // ────────── Main Process & Render ──────────
+  function processAndRender(period) {
+    filteredPeriod = period;
+    const data = applyFilters(rawData);
+
+    // Group by index
+    const grouped = {};
+    data.forEach(row => {
+      const key = row.index;
+      if (!grouped[key]) grouped[key] = { campaigns: new Set(), totalImpression: 0, totalBudget: 0, rows: [] };
+      grouped[key].campaigns.add(row.campaign);
+      grouped[key].totalImpression += row.impression;
+      grouped[key].totalBudget += row.budget;
+      grouped[key].rows.push(row);
+    });
+    allGrouped = grouped;
+
+    const totalInv = parseFloat(document.getElementById('totalInventoryInput').value) || 0;
+
+    // Date range
+    const allDates = data.map(r => r.date).filter(Boolean).sort();
+    const minD = allDates[0] || '-', maxD = allDates[allDates.length - 1] || '-';
+    document.getElementById('dataRange').textContent = `분석 기간: ${minD} ~ ${maxD}  |  총 ${Object.keys(grouped).length}개 index  |  ${data.length.toLocaleString()}행`;
+
+    renderKPIs(grouped, totalInv, data);
+    buildComboData(data);        // 최근 30일 combo 집계 (버튼·차트가 사용)
+    buildMonthlyComboAvg();      // from full rawData, per month
+    resolveComparisonMonths();   // decide current vs prior month
+    renderBurnChart(grouped, totalInv);
+    renderTrendChart(grouped);
+    populateDailyButtons();      // 일별 트렌드 대분류 버튼
+    renderDailyChart(data);
+    renderBudgetChart(grouped);
+    renderTable(grouped, totalInv, data);
+    renderRaw(data);
+    populateCategoryChips();
+    populateWeekdayButtons();    // 요일별 추이 대분류 버튼
+    renderWeekdayChart();
+    renderCapacityTable(totalInv);
+    renderMomChart();            // month-over-month comparison chart
+  }
+
+  // ────────── Monthly per-combo averages (from full rawData) ──────────
+  function buildMonthlyComboAvg() {
+    monthlyComboAvg = {};
+    rawData.forEach(r => {
+      const mk = monthKeyOf(r.date);
+      if (!mk) return;
+      const k = comboKey(r.index, r.campaign);
+      if (!monthlyComboAvg[k]) monthlyComboAvg[k] = { index: r.index, template: r.campaign, category: r.category || '', months: {} };
+      if (!monthlyComboAvg[k].category && r.category) monthlyComboAvg[k].category = r.category;
+      if (!monthlyComboAvg[k].months[mk]) monthlyComboAvg[k].months[mk] = { totalImp: 0, dates: new Set() };
+      monthlyComboAvg[k].months[mk].totalImp += r.impression;
+      monthlyComboAvg[k].months[mk].dates.add(r.date);
+    });
+  }
+
+  // daily average for a combo in a specific month
+  function comboMonthAvg(k, month) {
+    const c = monthlyComboAvg[k];
+    if (!c || !c.months[month]) return null;
+    const m = c.months[month];
+    return m.dates.size ? m.totalImp / m.dates.size : 0;
+  }
+
+  // Decide which two months to compare: current = selected month (or latest month in data),
+  // prior = the calendar month immediately before it.
+  function resolveComparisonMonths() {
+    const monthsInData = Array.from(new Set(rawData.map(r => monthKeyOf(r.date)).filter(Boolean))).sort();
+    if (!monthsInData.length) { momCurMonth = momPrevMonth = null; return; }
+    // current: selected month if a specific one is chosen, else latest month present
+    momCurMonth = (selectedMonth !== 'all') ? selectedMonth : monthsInData[monthsInData.length - 1];
+    // prior: the calendar month right before momCurMonth
+    momPrevMonth = prevMonthKey(momCurMonth);
+    // if that prior month has no data at all, leave it (chart will show "no comparison")
+  }
+
+  function prevMonthKey(mk) {
+    const [y, m] = mk.split('-').map(Number);
+    const d = new Date(y, m - 1, 1);   // first day of this month
+    d.setMonth(d.getMonth() - 1);      // go back one month
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+
+  // ────────── Build index+template combo aggregates ──────────
+  const WD_LABELS = ['일','월','화','수','목','금','토'];
+  function comboKey(idx, tpl) { return idx + ' ▸ ' + tpl; }
+
+  // 공통 대분류 색상 팔레트
+  const CAT_COLORS = { 'KBO':'#f59e0b', 'DA':'#8b5cf6', 'KBO_DA':'#ec4899', '일반광고':'#06b6d4', '(미분류)':'#71717a' };
+  function catColor(cat) { return CAT_COLORS[cat] || '#71717a'; }
+
+  // 최근 30일 기준 대분류 목록 (노출 순)
+  function categoriesByImp() {
+    const catImp = {};
+    Object.values(comboData).forEach(c => { const cat = c.category || '(미분류)'; catImp[cat] = (catImp[cat] || 0) + c.allImp; });
+    return Object.keys(catImp).sort((a,b) => catImp[b] - catImp[a]);
+  }
+
+  // 대분류 토글 버튼 그룹 렌더 (containerId, 선택 Set, 재렌더 콜백)
+  function renderCatButtonGroup(containerId, selectedSet) {
+    const box = document.getElementById(containerId);
+    if (!box) return;
+    const cats = categoriesByImp();
+    if (!cats.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+    box.style.display = 'flex';
+    // 여전히 유효한 선택만 유지
+    [...selectedSet].forEach(c => { if (!cats.includes(c)) selectedSet.delete(c); });
+    // '전체' 버튼 + 대분류 버튼들
+    const allActive = selectedSet.size === 0;
+    let html = `<button class="cat-toggle" data-cat="__all__"
+      style="padding:5px 12px; font-size:12px; border-radius:7px; cursor:pointer; transition:all 0.15s; font-weight:600;
+      border:1px solid ${allActive ? 'var(--accent2)' : 'var(--border)'};
+      background:${allActive ? 'rgba(6,182,212,0.12)' : 'transparent'};
+      color:${allActive ? 'var(--accent2)' : 'var(--sub)'};">전체 합산</button>`;
+    html += cats.map(cat => {
+      const active = selectedSet.has(cat);
+      const color = catColor(cat);
+      return `<button class="cat-toggle" data-cat="${cat.replace(/"/g,'&quot;')}"
+        style="padding:5px 12px; font-size:12px; border-radius:7px; cursor:pointer; transition:all 0.15s; font-weight:600;
+        border:1px solid ${active ? color : 'var(--border)'};
+        background:${active ? color + '22' : 'transparent'};
+        color:${active ? color : 'var(--sub)'};">${cat}</button>`;
+    }).join('');
+    box.innerHTML = html;
+  }
+
+  function buildComboData(data) {
+    // 요일 분석은 대시보드 날짜 기준 최근 30일로 고정 (월 선택과 무관)
+    const recent = filterRecentDays(rawData, 30);
+    comboData = {};
+    recent.forEach(r => {
+      if (!r.date) return;
+      const d = new Date(r.date);
+      if (isNaN(d)) return;
+      const k = comboKey(r.index, r.campaign);
+      if (!comboData[k]) comboData[k] = { index: r.index, template: r.campaign, category: r.category || '', byWeekday: Array.from({length:7},()=>({sum:0,dates:new Set()})), allImp: 0, allDates: new Set() };
+      // if category was empty on first sighting but present later, backfill
+      if (!comboData[k].category && r.category) comboData[k].category = r.category;
+      const wd = d.getDay();
+      const dateStr = r.date;
+      comboData[k].byWeekday[wd].sum += r.impression;
+      comboData[k].byWeekday[wd].dates.add(dateStr);
+      comboData[k].allImp += r.impression;
+      comboData[k].allDates.add(dateStr);
+    });
+  }
+
+  // 주어진 필터 조건으로 요일별 평균 노출 배열[7] 반환
+  function weekdayAvgFiltered(filterFn) {
+    const agg = Array.from({length:7},()=>({sum:0,dates:new Set()}));
+    Object.values(comboData).forEach(c => {
+      if (!filterFn(c)) return;
+      c.byWeekday.forEach((w,i) => {
+        agg[i].sum += w.sum;
+        w.dates.forEach(dt => agg[i].dates.add(dt));
+      });
+    });
+    return agg.map(w => w.dates.size ? w.sum / w.dates.size : 0);
+  }
+
+  // ────────── Weekday 대분류 버튼 ──────────
+  function populateWeekdayButtons() {
+    renderCatButtonGroup('weekdayCatBtns', weekdayCats);
+  }
+
+  // ────────── Weekday Chart (선 그래프 · 대분류 다중 선택) ──────────
+  function renderWeekdayChart() {
+    const ctx = document.getElementById('weekdayChart').getContext('2d');
+    if (weekdayChartInst) weekdayChartInst.destroy();
+
+    const labels = WD_LABELS.map(l => l + '요일');
+    const datasets = [];
+
+    if (weekdayCats.size === 0) {
+      // 전체 합산 (단일 선)
+      const avgs = weekdayAvgFiltered(() => true);
+      datasets.push({
+        label: '전체 합산',
+        data: avgs,
+        borderColor: '#06b6d4',
+        backgroundColor: 'rgba(6,182,212,0.12)',
+        borderWidth: 2.5,
+        pointRadius: 3,
+        pointBackgroundColor: '#06b6d4',
+        tension: 0.35,
+        fill: false,
+      });
+    } else {
+      // 선택된 대분류별 선
+      [...weekdayCats].forEach(cat => {
+        const avgs = weekdayAvgFiltered(c => (c.category || '(미분류)') === cat);
+        const color = catColor(cat);
+        datasets.push({
+          label: cat,
+          data: avgs,
+          borderColor: color,
+          backgroundColor: color + '20',
+          borderWidth: 2.5,
+          pointRadius: 3,
+          pointBackgroundColor: color,
+          tension: 0.35,
+          fill: false,
+        });
+      });
+    }
+
+    weekdayChartInst = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: datasets.length > 1, position: 'top', labels: { boxWidth: 12, padding: 12, font: { size: 11 } } },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtNum(ctx.parsed.y) + ' (평균)' } }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#71717a' } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#71717a' }, beginAtZero: true }
+        }
+      }
+    });
+
+    // 하단 요일 통계 칩: 전체 합산 기준(참고용)
+    const overall = weekdayAvgFiltered(weekdayCats.size === 0 ? (() => true) : (c => weekdayCats.has(c.category || '(미분류)')));
+    const maxVal = Math.max(...overall, 0);
+    const statsBox = document.getElementById('weekdayStats');
+    statsBox.innerHTML = overall.map((v,i) => {
+      const isPeak = v === maxVal && maxVal > 0;
+      return `<div style="background:var(--surface2); border:1px solid ${isPeak?'var(--accent2)':'var(--border)'}; border-radius:9px; padding:9px 6px; text-align:center;">
+        <p style="font-size:10px; color:${isPeak?'var(--accent2)':'var(--muted)'}; font-weight:600; margin-bottom:3px;">${WD_LABELS[i]}${isPeak?' ★':''}</p>
+        <p class="mono" style="font-size:12px; font-weight:700; color:var(--text);">${fmtNum(v)}</p>
+      </div>`;
+    }).join('');
+  }
+
+  // ────────── Month-over-Month Comparison Chart (전월 동기간 비교) ──────────
+  function monthLabel(mk) {
+    if (!mk) return '';
+    const [y, m] = mk.split('-');
+    return parseInt(m) + '월';
+  }
+
+  // 비교 기준일(dayLimit) 결정: 당월이면 오늘 날짜, 과거월이면 그 달의 마지막 데이터 일자
+  function comparisonDayLimit(monthKey) {
+    if (monthKey === CUR_MONTH_KEY) return TODAY.getDate();
+    const days = rawData.filter(r => monthKeyOf(r.date) === monthKey).map(r => dayOfMonth(r.date)).filter(v => v != null);
+    return days.length ? Math.max(...days) : 31;
+  }
+
+  // 특정 월의 1~dayLimit 동안 combo별 [노출합, 활동일수] 집계
+  function samePeriodComboAgg(monthKey, dayLimit) {
+    const agg = {}; // comboKey -> {index, template, category, totalImp, dates:Set}
+    rawData.forEach(r => {
+      if (monthKeyOf(r.date) !== monthKey) return;
+      const d = dayOfMonth(r.date);
+      if (d == null || d > dayLimit) return;
+      const k = comboKey(r.index, r.campaign);
+      if (!agg[k]) agg[k] = { index: r.index, template: r.campaign, category: r.category || '', totalImp: 0, dates: new Set() };
+      if (!agg[k].category && r.category) agg[k].category = r.category;
+      agg[k].totalImp += r.impression;
+      agg[k].dates.add(r.date);
+    });
+    return agg;
+  }
+
+  function renderMomChart() {
+    const ctx = document.getElementById('momChart').getContext('2d');
+    if (momChartInst) momChartInst.destroy();
+    const emptyBox = document.getElementById('momEmpty');
+    const canvas = document.getElementById('momChart');
+    const subtitle = document.getElementById('momSubtitle');
+
+    // 동기간 기준일: 이번 달 기준으로 산정, 전월도 같은 일자까지 비교
+    const dayLimit = momCurMonth ? comparisonDayLimit(momCurMonth) : null;
+    const curAgg = momCurMonth ? samePeriodComboAgg(momCurMonth, dayLimit) : {};
+    const prevAgg = momPrevMonth ? samePeriodComboAgg(momPrevMonth, dayLimit) : {};
+
+    const prevExists = Object.keys(prevAgg).length > 0;
+    if (!momCurMonth || !prevExists) {
+      canvas.style.display = 'none';
+      emptyBox.style.display = 'block';
+      emptyBox.textContent = momPrevMonth
+        ? `${monthLabel(momPrevMonth)} 동기간 데이터가 없어 비교할 수 없습니다.`
+        : '비교할 전월 데이터가 없습니다.';
+      subtitle.textContent = `기준: ${monthLabel(momCurMonth)} 1~${dayLimit || '-'}일`;
+      return;
+    }
+    canvas.style.display = '';
+    emptyBox.style.display = 'none';
+    subtitle.textContent = `${monthLabel(momPrevMonth)} vs ${monthLabel(momCurMonth)} · 1~${dayLimit}일 동기간 일평균 노출 비교`;
+
+    const groupBy = document.getElementById('momGroupBy').value;
+    const applyCatFilter = allCategories.length > 0 && selectedCategories.size > 0;
+
+    // combo의 일평균 = 노출합 / 활동일수
+    const avgOf = (agg, k) => (agg[k] && agg[k].dates.size) ? agg[k].totalImp / agg[k].dates.size : 0;
+
+    let labels = [], prevVals = [], curVals = [];
+
+    if (groupBy === 'category') {
+      const catAgg = {}; // cat -> {prev, cur}
+      const allKeys = new Set([...Object.keys(curAgg), ...Object.keys(prevAgg)]);
+      allKeys.forEach(k => {
+        const cat = (curAgg[k]?.category || prevAgg[k]?.category || '(미분류)');
+        if (applyCatFilter && !selectedCategories.has(cat)) return;
+        if (!catAgg[cat]) catAgg[cat] = { prev: 0, cur: 0 };
+        catAgg[cat].prev += avgOf(prevAgg, k);
+        catAgg[cat].cur += avgOf(curAgg, k);
+      });
+      const cats = Object.keys(catAgg).sort((a,b) => catAgg[b].cur - catAgg[a].cur);
+      labels = cats;
+      prevVals = cats.map(c => catAgg[c].prev);
+      curVals = cats.map(c => catAgg[c].cur);
+    } else {
+      const allKeys = new Set([...Object.keys(curAgg), ...Object.keys(prevAgg)]);
+      const arr = [...allKeys].map(k => {
+        const cat = (curAgg[k]?.category || prevAgg[k]?.category || '(미분류)');
+        if (applyCatFilter && !selectedCategories.has(cat)) return null;
+        const prevAvg = avgOf(prevAgg, k);
+        const curAvg = avgOf(curAgg, k);
+        if (prevAvg === 0 && curAvg === 0) return null;
+        const idx = (curAgg[k]?.index || prevAgg[k]?.index || k);
+        return { label: idx, prevAvg, curAvg };
+      }).filter(Boolean).sort((a,b) => b.curAvg - a.curAvg).slice(0, 15);
+      labels = arr.map(x => x.label);
+      prevVals = arr.map(x => x.prevAvg);
+      curVals = arr.map(x => x.curAvg);
+    }
+
+    if (!labels.length) {
+      canvas.style.display = 'none';
+      emptyBox.style.display = 'block';
+      emptyBox.textContent = '선택한 조건에 해당하는 데이터가 없습니다.';
+      return;
+    }
+
+    momChartInst = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: monthLabel(momPrevMonth) + ' (전월 동기간)', data: prevVals, backgroundColor: '#52525b', borderRadius: 5, borderSkipped: false },
+          { label: monthLabel(momCurMonth) + ' (이번 달)', data: curVals, backgroundColor: '#06b6d4', borderRadius: 5, borderSkipped: false }
+        ]
+      },
+      options: {
+        responsive: true,
+        indexAxis: groupBy === 'combo' ? 'y' : 'x',
+        plugins: {
+          legend: { position: 'top', labels: { boxWidth: 12, padding: 12, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: c => c.dataset.label + ': ' + fmtNum(c.parsed[groupBy === 'combo' ? 'x' : 'y']),
+              afterBody: (items) => {
+                if (items.length < 2) return '';
+                const prev = items.find(i => i.datasetIndex === 0);
+                const cur = items.find(i => i.datasetIndex === 1);
+                if (!prev || !cur) return '';
+                const pv = prev.parsed[groupBy === 'combo' ? 'x' : 'y'];
+                const cv = cur.parsed[groupBy === 'combo' ? 'x' : 'y'];
+                if (pv > 0) {
+                  const pct = ((cv - pv) / pv * 100);
+                  return '증감: ' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+                }
+                return '';
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#71717a', maxTicksLimit: groupBy === 'combo' ? undefined : 12 } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#71717a', autoSkip: false, font: { size: 10 } }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  // ────────── Capacity Analysis (평균 기반: 요일 여유 + 전월 동기간 대비 감소분) ──────────
+  function renderCapacityTable(totalInv) {
+    // 인벤토리 기준값 제거됨 → 인벤토리 관련 컬럼은 항상 숨김
+    document.querySelectorAll('.capInvCol').forEach(el => el.style.display = 'none');
+
+    // 전월 동기간 비교용 집계 (MoM 차트와 동일 기준)
+    const dayLimit = momCurMonth ? comparisonDayLimit(momCurMonth) : null;
+    const curAgg = momCurMonth ? samePeriodComboAgg(momCurMonth, dayLimit) : {};
+    const prevAgg = momPrevMonth ? samePeriodComboAgg(momPrevMonth, dayLimit) : {};
+    const spAvg = (agg, k) => (agg[k] && agg[k].dates.size) ? agg[k].totalImp / agg[k].dates.size : null;
+
+    capacityCache = Object.keys(comboData).map(k => {
+      const c = comboData[k];
+      const avgs = c.byWeekday.map(w => w.dates.size ? w.sum / w.dates.size : 0);
+      const peak = Math.max(...avgs, 0);
+      const activeDays = c.allDates.size || 1;
+      const dailyAvg = c.allImp / activeDays;
+
+      // 요일 여유: 각 요일 평균이 피크 요일 대비 얼마나 미달인지의 합 (운영 중인 요일만)
+      let weekdaySlack = 0;
+      avgs.forEach(v => { if (v > 0) weekdaySlack += Math.max(peak - v, 0); });
+
+      // 전월 동기간 대비: 이번 달(1~dayLimit) 일평균 vs 전월(1~dayLimit) 일평균
+      const curAvg = spAvg(curAgg, k);
+      const prevAvg = spAvg(prevAgg, k);
+      let momDrop = 0, momDeltaPct = null;
+      if (curAvg !== null && prevAvg !== null && prevAvg > 0) {
+        momDrop = Math.max(prevAvg - curAvg, 0);
+        momDeltaPct = ((curAvg - prevAvg) / prevAvg) * 100;   // 음수면 감소
+      }
+
+      // 종합 추가 여력 = 요일 여유 + 전월 대비 감소분
+      const totalCapacity = weekdaySlack + momDrop;
+
+      // 상태 판정 (평균 기반)
+      let status;
+      if (totalCapacity <= 0) status = 'full';
+      else if (totalCapacity >= dailyAvg * 0.5) status = 'high';   // 일평균의 50% 이상 여력이면 추천
+      else status = 'low';
+
+      return {
+        key: k, index: c.index, template: c.template, category: c.category || '',
+        dailyAvg, weekdaySlack, momDrop, momDeltaPct, curAvg, prevAvg, totalCapacity, status
+      };
+    }).sort((a,b) => b.totalCapacity - a.totalCapacity);
+
+    renderCapacityRows(false);
+  }
+
+  function renderCapacityRows(showInv) {
+    const hasCat = allCategories.length > 0;
+    const rows = capacityCache.filter(r => {
+      // status filter
+      let statusOk;
+      if (capacityFilter === 'available') statusOk = (r.status === 'high' || r.status === 'low');
+      else if (capacityFilter === 'full') statusOk = (r.status === 'full');
+      else statusOk = true;
+      if (!statusOk) return false;
+      // category filter (empty selection = all)
+      if (hasCat && selectedCategories.size > 0) {
+        return selectedCategories.has(r.category || '(미분류)');
+      }
+      return true;
+    });
+    const body = document.getElementById('capacityBody');
+    const colCount = 7 + (hasCat ? 1 : 0);
+    if (!rows.length) {
+      body.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; color:var(--muted); padding:28px;">해당하는 상품이 없습니다.</td></tr>`;
+      return;
+    }
+    // category badge palette
+    const catColors = { 'KBO':'#f59e0b', 'DA':'#8b5cf6', 'KBO_DA':'#ec4899', '일반광고':'#06b6d4' };
+    body.innerHTML = rows.map(r => {
+      // 전월 대비 증감 셀
+      let momCell;
+      if (r.momDeltaPct === null) {
+        momCell = `<td style="color:var(--muted); font-size:12px;">신규/전월없음</td>`;
+      } else {
+        const up = r.momDeltaPct >= 0;
+        const color = up ? '#10b981' : '#ef4444';
+        const arrow = up ? '▲' : '▼';
+        momCell = `<td class="mono" style="color:${color}; font-weight:600;">${arrow} ${Math.abs(r.momDeltaPct).toFixed(1)}%</td>`;
+      }
+      const catLabel = r.category || '(미분류)';
+      const catColor = catColors[r.category] || '#71717a';
+      const catCell = hasCat
+        ? `<td class="capCatCol"><span class="badge" style="background:${catColor}22; color:${catColor};">${catLabel}</span></td>`
+        : '';
+      let badgeClass, badgeLabel;
+      if (r.status === 'full') { badgeClass = 'badge-danger'; badgeLabel = '여력 없음'; }
+      else if (r.status === 'high') { badgeClass = 'badge-ok'; badgeLabel = '추가 추천'; }
+      else { badgeClass = 'badge-warn'; badgeLabel = '소폭 여유'; }
+
+      return `<tr>
+        <td><span class="mono" style="font-weight:600; color:var(--accent2);">${r.index}</span></td>
+        ${catCell}
+        <td style="color:var(--sub); font-size:12px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${r.template}">${r.template}</td>
+        <td class="mono">${fmtNum(r.dailyAvg)}</td>
+        ${momCell}
+        <td class="mono" style="color:var(--sub);">${fmtNum(r.weekdaySlack)}</td>
+        <td class="mono" style="font-weight:700; color:${r.status==='high'?'var(--ok)':r.status==='low'?'var(--warn)':'var(--muted)'};">${fmtNum(r.totalCapacity)}</td>
+        <td><span class="badge ${badgeClass}">${badgeLabel}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ────────── Category Chips (multi-select) ──────────
+  function populateCategoryChips() {
+    // gather distinct categories from combo data, ordered by total impression desc
+    const catImp = {};
+    Object.values(comboData).forEach(c => {
+      const cat = c.category || '(미분류)';
+      catImp[cat] = (catImp[cat] || 0) + c.allImp;
+    });
+    allCategories = Object.keys(catImp).sort((a,b) => catImp[b] - catImp[a]);
+
+    const wrap = document.getElementById('categoryFilterWrap');
+    const chips = document.getElementById('categoryChips');
+    if (allCategories.length === 0) {
+      wrap.style.display = 'none';
+      document.querySelectorAll('.capCatCol').forEach(el => el.style.display = 'none');
+      return;
+    }
+    wrap.style.display = 'flex';
+    document.querySelectorAll('.capCatCol').forEach(el => el.style.display = '');
+
+    // keep only still-valid selections
+    selectedCategories = new Set([...selectedCategories].filter(c => allCategories.includes(c)));
+
+    const catColors = { 'KBO':'#f59e0b', 'DA':'#8b5cf6', 'KBO_DA':'#ec4899', '일반광고':'#06b6d4' };
+    chips.innerHTML = allCategories.map(cat => {
+      const active = selectedCategories.has(cat);
+      const color = catColors[cat] || '#71717a';
+      return `<button class="cat-chip" data-cat="${cat.replace(/"/g,'&quot;')}"
+        style="padding:5px 12px; font-size:12px; border-radius:7px; cursor:pointer; transition:all 0.15s; font-weight:600;
+        border:1px solid ${active ? color : 'var(--border)'};
+        background:${active ? color + '22' : 'transparent'};
+        color:${active ? color : 'var(--sub)'};">${cat}</button>`;
+    }).join('');
+  }
+
+  // category chip clicks (toggle multi-select)
+  document.getElementById('categoryChips').addEventListener('click', e => {
+    const btn = e.target.closest('.cat-chip');
+    if (!btn) return;
+    const cat = btn.dataset.cat;
+    if (selectedCategories.has(cat)) selectedCategories.delete(cat);
+    else selectedCategories.add(cat);
+    populateCategoryChips();  // re-render chip styles
+    renderCapacityRows(parseFloat(document.getElementById('totalInventoryInput').value) > 0);
+    renderMomChart();  // MoM chart respects category filter
+  });
+
+  // capacity filter buttons
+  document.getElementById('capacityFilterBtns').addEventListener('click', e => {
+    const btn = e.target.closest('.period-btn');
+    if (!btn) return;
+    document.querySelectorAll('#capacityFilterBtns .period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    capacityFilter = btn.dataset.cap;
+    renderCapacityRows(parseFloat(document.getElementById('totalInventoryInput').value) > 0);
+  });
+
+  // 일별 트렌드 대분류 토글 버튼 (다중 선택, '전체 합산' = 전체 해제)
+  document.getElementById('dailyCatBtns').addEventListener('click', e => {
+    const btn = e.target.closest('.cat-toggle');
+    if (!btn) return;
+    const cat = btn.dataset.cat;
+    if (cat === '__all__') dailyCats.clear();
+    else if (dailyCats.has(cat)) dailyCats.delete(cat);
+    else dailyCats.add(cat);
+    populateDailyButtons();
+    renderDailyChart();
+  });
+
+  // 요일별 추이 대분류 토글 버튼 (다중 선택)
+  document.getElementById('weekdayCatBtns').addEventListener('click', e => {
+    const btn = e.target.closest('.cat-toggle');
+    if (!btn) return;
+    const cat = btn.dataset.cat;
+    if (cat === '__all__') weekdayCats.clear();
+    else if (weekdayCats.has(cat)) weekdayCats.delete(cat);
+    else weekdayCats.add(cat);
+    populateWeekdayButtons();
+    renderWeekdayChart();
+  });
+
+  // ────────── KPI ──────────
+  // 특정 월의 1일~dayLimit까지 합계 (동기간 비교용)
+  function monthTotals(monthKey, dayLimit) {
+    let imp = 0, bud = 0; const idxSet = new Set();
+    rawData.forEach(r => {
+      if (monthKeyOf(r.date) !== monthKey) return;
+      if (dayLimit != null) { const d = dayOfMonth(r.date); if (d == null || d > dayLimit) return; }
+      imp += r.impression; bud += r.budget; if (r.index) idxSet.add(r.index);
+    });
+    const cpm = imp > 0 ? (bud / imp * 1000) : 0;
+    return { imp, bud, cpm, idxCount: idxSet.size };
+  }
+
+  function renderKPIs(grouped, totalInv, data) {
+    const indices = Object.keys(grouped);
+    const totalImp = indices.reduce((s, k) => s + grouped[k].totalImpression, 0);
+    const totalBud = indices.reduce((s, k) => s + grouped[k].totalBudget, 0);
+    const avgCpm = totalImp > 0 ? (totalBud / totalImp * 1000) : 0;
+
+    // 전월 동기간 대비 계산
+    // 기준월: 선택월(당월 디폴트). '전체 월'이면 최신월 사용.
+    const monthsInData = Array.from(new Set(rawData.map(r => monthKeyOf(r.date)).filter(Boolean))).sort();
+    const curMonth = (selectedMonth !== 'all') ? selectedMonth : (monthsInData[monthsInData.length - 1] || CUR_MONTH_KEY);
+    const prevMonth = prevMonthKey(curMonth);
+    // 동기간 기준일: 당월이면 오늘 날짜, 과거월이면 그 달의 마지막 데이터 일자
+    let dayLimit;
+    if (curMonth === CUR_MONTH_KEY) {
+      dayLimit = TODAY.getDate();
+    } else {
+      // 해당 월의 최대 데이터 일자
+      const days = rawData.filter(r => monthKeyOf(r.date) === curMonth).map(r => dayOfMonth(r.date)).filter(v => v != null);
+      dayLimit = days.length ? Math.max(...days) : 31;
+    }
+    const curT = monthTotals(curMonth, dayLimit);
+    const prevT = monthTotals(prevMonth, dayLimit);   // 전월 동일 일자까지
+
+    function pct(cur, prev) {
+      if (prev == null || prev === 0) return null;
+      return (cur - prev) / prev * 100;
+    }
+    const impPct = pct(curT.imp, prevT.imp);
+    const budPct = pct(curT.bud, prevT.bud);
+    const cpmPct = pct(curT.cpm, prevT.cpm);
+    const idxPct = pct(curT.idxCount, prevT.idxCount);
+
+    const cmpNote = `${monthLabel(prevMonth)} 동기간(1~${dayLimit}일) 대비`;
+
+    const cards = [
+      { label: '총 누적 노출수', value: fmtNum(totalImp), sub: indices.length + '개 index 합산', color: '#3b82f6', pct: impPct },
+      { label: '총 매체집행금액', value: fmtMoney(totalBud), sub: cmpNote, color: '#06b6d4', pct: budPct },
+      { label: '평균 CPM', value: fmtMoney(avgCpm), sub: '1,000 노출당 비용', color: '#8b5cf6', pct: cpmPct },
+      { label: '총 INDEX 수', value: indices.length + '개', sub: '유니크 index', color: '#10b981', pct: idxPct }
+    ];
+
+    const container = document.getElementById('kpiCards');
+    container.innerHTML = '';
+    cards.forEach(c => {
+      let deltaHtml = '';
+      if (c.pct !== null && isFinite(c.pct)) {
+        const up = c.pct >= 0;
+        const dcolor = up ? '#10b981' : '#ef4444';
+        const arrow = up ? '▲' : '▼';
+        deltaHtml = `<span style="font-size:12px; font-weight:600; color:${dcolor}; margin-left:8px;">${arrow} ${Math.abs(c.pct).toFixed(1)}%</span>`;
+      } else {
+        deltaHtml = `<span style="font-size:11px; color:var(--muted); margin-left:8px;">전월 없음</span>`;
+      }
+      container.innerHTML += `
+        <div class="stat-card fade-up">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+            <span style="font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.07em;">${c.label}</span>
+            <div style="width:8px; height:8px; border-radius:50%; background:${c.color}; box-shadow:0 0 8px ${c.color}88;"></div>
+          </div>
+          <div style="display:flex; align-items:baseline; margin-bottom:6px;">
+            <p style="font-size:26px; font-weight:800; letter-spacing:-0.03em; color:${c.color};" class="mono">${c.value}</p>
+            ${deltaHtml}
+          </div>
+          <div class="glow-line" style="margin-bottom:8px; background:linear-gradient(90deg,${c.color}44,transparent);"></div>
+          <p style="font-size:11px; color:var(--muted);">${c.sub}</p>
+        </div>`;
+    });
+  }
+
+  // ────────── Burn Chart (최근 30일 · index별 노출 상위 20 · 내림차순) ──────────
+  function renderBurnChart(grouped, totalInv) {
+    const ctx = document.getElementById('burnChart').getContext('2d');
+    if (burnChartInst) burnChartInst.destroy();
+
+    // 오늘 기준 최근 30일 데이터를 index별로 집계 (월 필터와 무관)
+    const recent = filterRecentDays(rawData, 30);
+    const byIndex = {};
+    recent.forEach(r => {
+      if (!r.index) return;
+      byIndex[r.index] = (byIndex[r.index] || 0) + r.impression;
+    });
+    // 내림차순 정렬 후 상위 20
+    const sorted = Object.keys(byIndex).sort((a, b) => byIndex[b] - byIndex[a]).slice(0, 20);
+    const labels = sorted;
+    const dataArr = sorted.map(k => byIndex[k]);
+    // 상위일수록 진한 색
+    const maxV = dataArr[0] || 1;
+    const colors = dataArr.map(v => {
+      const t = v / maxV;
+      if (t >= 0.66) return '#06b6d4';
+      if (t >= 0.33) return '#3b82f6';
+      return '#52525b';
+    });
+
+    const isHoriz = burnChartType === 'horizontal';
+    burnChartInst = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: '노출수 (최근 30일)',
+          data: dataArr,
+          backgroundColor: colors,
+          borderRadius: 6,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: isHoriz ? 'y' : 'x',
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => fmtNum(ctx.parsed[isHoriz?'x':'y'])
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#71717a', autoSkip: false, maxRotation: 90, minRotation: 45, font: { size: 9 } } },
+          y: {
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: { color: '#71717a', font: { size: isHoriz ? 9 : 11 } }
+          }
+        }
+      }
+    });
+  }
+
+  // ────────── Trend Chart (cumulative by index) ──────────
+  function renderTrendChart(grouped) {
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    if (trendChartInst) trendChartInst.destroy();
+
+    // 당월(대시보드 날짜 기준)에 해당하는 데이터만 사용 (월 드롭다운과 무관)
+    const curData = rawData.filter(r => monthKeyOf(r.date) === CUR_MONTH_KEY);
+    // index별 그룹
+    const idxGroup = {};
+    curData.forEach(r => {
+      if (!r.index) return;
+      if (!idxGroup[r.index]) idxGroup[r.index] = [];
+      idxGroup[r.index].push(r);
+    });
+    const allDateSet = new Set();
+    curData.forEach(r => { if (r.date) allDateSet.add(r.date); });
+    const sortedDates = Array.from(allDateSet).sort();
+
+    // 당월 노출 상위 8개 index만 표시
+    const topIndices = Object.keys(idxGroup)
+      .sort((a, b) => idxGroup[b].reduce((s, r) => s + r.impression, 0) - idxGroup[a].reduce((s, r) => s + r.impression, 0))
+      .slice(0, 8);
+
+    const palette = ['#3b82f6','#06b6d4','#8b5cf6','#10b981','#f59e0b','#ef4444','#ec4899','#84cc16'];
+    const datasets = topIndices.map((key, i) => {
+      let cum = 0;
+      const pts = sortedDates.map(d => {
+        const dayRows = idxGroup[key].filter(r => r.date === d);
+        cum += dayRows.reduce((s, r) => s + r.impression, 0);
+        return cum;
+      });
+      return {
+        label: key,
+        data: pts,
+        borderColor: palette[i % palette.length],
+        backgroundColor: palette[i % palette.length] + '18',
+        borderWidth: 2,
+        pointRadius: 2,
+        tension: 0.4,
+        fill: false,
+      };
+    });
+
+    trendChartInst = new Chart(ctx, {
+      type: 'line',
+      data: { labels: sortedDates, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, padding: 10, font: { size: 10 } } }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { maxTicksLimit: 8, color: '#71717a' } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#71717a' } }
+        }
+      }
+    });
+  }
+
+  // ────────── Daily 대분류 버튼 ──────────
+  function populateDailyButtons() {
+    renderCatButtonGroup('dailyCatBtns', dailyCats);
+  }
+
+  // ────────── Daily Chart (최근 30일 · 대분류 다중 선택 선 그래프) ──────────
+  function renderDailyChart(data) {
+    const ctx = document.getElementById('dailyChart').getContext('2d');
+    if (dailyChartInst) dailyChartInst.destroy();
+    // 월 필터와 무관하게 오늘 기준 최근 30일
+    const recent = filterRecentDays(rawData, 30);
+    const labels = Array.from(new Set(recent.map(r => r.date).filter(Boolean))).sort();
+
+    // 날짜별 노출 합 (필터 조건 적용)
+    const sumByDate = (filterFn) => {
+      const byDate = {};
+      recent.forEach(r => { if (!r.date) return; if (!filterFn(r)) return; byDate[r.date] = (byDate[r.date] || 0) + r.impression; });
+      return labels.map(d => byDate[d] || 0);
+    };
+
+    const datasets = [];
+    if (dailyCats.size === 0) {
+      datasets.push({
+        label: '전체 합산',
+        data: sumByDate(() => true),
+        borderColor: '#06b6d4',
+        backgroundColor: 'rgba(6,182,212,0.12)',
+        borderWidth: 2,
+        pointRadius: 2,
+        tension: 0.4,
+        fill: true,
+      });
+    } else {
+      [...dailyCats].forEach(cat => {
+        const color = catColor(cat);
+        datasets.push({
+          label: cat,
+          data: sumByDate(r => (r.category || '(미분류)') === cat),
+          borderColor: color,
+          backgroundColor: color + '18',
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.4,
+          fill: false,
+        });
+      });
+    }
+
+    dailyChartInst = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: datasets.length > 1, position: 'top', labels: { boxWidth: 12, padding: 12, font: { size: 11 } } },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtNum(ctx.parsed.y) } }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { maxTicksLimit: 8, color: '#71717a' } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#71717a' } }
+        }
+      }
+    });
+  }
+
+  // ────────── 노출수 비중 Doughnut ──────────
+  function renderBudgetChart(grouped) {
+    const ctx = document.getElementById('budgetChart').getContext('2d');
+    if (budgetChartInst) budgetChartInst.destroy();
+    // 노출수 기준 상위 8개 index
+    const sortedKeys = Object.keys(grouped).sort((a, b) => grouped[b].totalImpression - grouped[a].totalImpression);
+    const labels = sortedKeys.slice(0, 8);
+    const values = labels.map(k => grouped[k].totalImpression);
+    const totalAll = Object.keys(grouped).reduce((s, k) => s + grouped[k].totalImpression, 0) || 1;
+    const palette = ['#3b82f6','#06b6d4','#8b5cf6','#10b981','#f59e0b','#ef4444','#ec4899','#84cc16'];
+
+    budgetChartInst = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{ data: values, backgroundColor: palette, borderWidth: 0, hoverOffset: 6 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '68%',
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, padding: 8, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: ctx => ctx.label + ': ' + fmtNum(ctx.parsed) + ' (' + (ctx.parsed / totalAll * 100).toFixed(1) + '%)'
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // ────────── Detail Table ──────────
+  let tableCache = [];
+  function renderTable(grouped, totalInv, data) {
+    const showInv = totalInv > 0;
+    document.getElementById('thInventory').style.display = showInv ? '' : 'none';
+    document.getElementById('thRemain').style.display = showInv ? '' : 'none';
+
+    // Estimate days remaining
+    const allDates = data.map(r => r.date).filter(Boolean).sort();
+    const dayCount = (() => {
+      if (allDates.length < 2) return 1;
+      const d1 = new Date(allDates[0]), d2 = new Date(allDates[allDates.length-1]);
+      const diff = (d2 - d1) / 86400000 + 1;
+      return diff > 0 ? diff : 1;
+    })();
+
+    tableCache = Object.keys(grouped).map(key => {
+      const g = grouped[key];
+      const cpm = g.totalImpression > 0 ? (g.totalBudget / g.totalImpression * 1000) : 0;
+      const burnRate = showInv ? Math.min(g.totalImpression / totalInv * 100, 100) : null;
+      const remaining = showInv ? Math.max(totalInv - g.totalImpression, 0) : null;
+      const dailyAvg = g.totalImpression / dayCount;
+      const estDaysLeft = (remaining !== null && dailyAvg > 0) ? Math.ceil(remaining / dailyAvg) : null;
+      const status = burnRate === null ? null : burnRate >= 90 ? 'danger' : burnRate >= 70 ? 'warn' : 'ok';
+      return { key, g, cpm, burnRate, remaining, estDaysLeft, status, dailyAvg };
+    });
+    renderTableRows(tableCache, showInv);
+  }
+
+  function renderTableRows(rows, showInv) {
+    const body = document.getElementById('tableBody');
+    body.innerHTML = rows.map(({ key, g, cpm, burnRate, remaining, estDaysLeft, status }) => {
+      const campaigns = Array.from(g.campaigns).join(', ');
+      const progColor = status === 'danger' ? '#ef4444' : status === 'warn' ? '#f59e0b' : '#10b981';
+      const progPct = burnRate !== null ? burnRate.toFixed(1) : null;
+      const invCell = showInv
+        ? `<td style="color:var(--sub);" class="mono">${fmtNum(Math.round(g.totalImpression / (document.getElementById('totalInventoryInput').value || 1) * document.getElementById('totalInventoryInput').value))}</td>
+           <td style="color:${remaining === 0 ? 'var(--danger)' : 'var(--ok)'};" class="mono">${remaining !== null ? fmtNum(remaining) : '-'}</td>`
+        : '';
+      const estLabel = estDaysLeft !== null ? (estDaysLeft <= 0 ? '소진 완료' : estDaysLeft + '일 후') : '-';
+      const badgeClass = status === 'danger' ? 'badge-danger' : status === 'warn' ? 'badge-warn' : 'badge-ok';
+      const badgeLabel = status === 'danger' ? '즉시 점검' : status === 'warn' ? '주의' : '정상';
+
+      return `<tr>
+        <td><span class="mono" style="font-weight:600; color:var(--accent2);">${key}</span></td>
+        <td style="color:var(--sub); font-size:12px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${campaigns}">${campaigns}</td>
+        <td class="mono">${fmtNum(g.totalImpression)}</td>
+        <td class="mono">${fmtMoney(g.totalBudget)}</td>
+        <td class="mono" style="color:var(--sub);">${fmtMoney(cpm)}</td>
+        ${invCell}
+        <td>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="prog-track"><div class="prog-fill" style="width:${progPct || 0}%; background:${progColor};"></div></div>
+            <span class="mono" style="font-size:12px; color:${progColor};">${progPct !== null ? progPct + '%' : '-'}</span>
+          </div>
+        </td>
+        <td style="font-size:12px; color:var(--sub);">${estLabel}</td>
+        <td>${status ? `<span class="badge ${badgeClass}">${badgeLabel}</span>` : '<span style="color:var(--muted);font-size:12px;">-</span>'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function filterTable(query) {
+    const q = query.toLowerCase();
+    const showInv = parseFloat(document.getElementById('totalInventoryInput').value) > 0;
+    const filtered = tableCache.filter(r =>
+      r.key.toLowerCase().includes(q) ||
+      Array.from(r.g.campaigns).join(' ').toLowerCase().includes(q)
+    );
+    renderTableRows(filtered, showInv);
+  }
+
+  // ────────── Raw Table ──────────
+  function renderRaw(data) {
+    const body = document.getElementById('rawBody');
+    document.getElementById('rawCount').textContent = data.length.toLocaleString() + '개 행';
+    body.innerHTML = data.slice().reverse().map(r => `
+      <tr>
+        <td class="mono" style="color:var(--sub);">${r.date}</td>
+        <td class="mono" style="color:var(--accent2);">${r.index}</td>
+        <td style="color:var(--sub); font-size:12px;">${r.campaign}</td>
+        <td class="mono">${fmtNum(r.impression)}</td>
+        <td class="mono">${fmtMoney(r.budget)}</td>
+      </tr>`).join('');
+  }
+
+  // ────────── Period Buttons ──────────
+  document.getElementById('periodBtns').addEventListener('click', e => {
+    const btn = e.target.closest('.period-btn');
+    if (!btn) return;
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    processAndRender(btn.dataset.period);
+  });
+
+  // ────────── Chart Type Buttons ──────────
+  document.getElementById('chartTypeBtns').addEventListener('click', e => {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    document.querySelectorAll('#chartTypeBtns .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    burnChartType = btn.dataset.chart;
+    const totalInv = parseFloat(document.getElementById('totalInventoryInput').value) || 0;
+    renderBurnChart(allGrouped, totalInv);
+  });
+
+  // ────────── Reset ──────────
+  function resetUpload() {
+    rawData = []; allGrouped = {};
+    selectedMonth = 'all'; filteredPeriod = 'all';
+    selectedCategories = new Set(); allCategories = []; capacityFilter = 'available';
+    dailyCats = new Set(); weekdayCats = new Set();
+    document.getElementById('csvInput').value = '';
+    document.getElementById('uploadSection').style.display = 'block';
+    document.getElementById('dashSection').style.display = 'none';
+    document.getElementById('headerMeta').style.display = 'none';
+    if (burnChartInst) burnChartInst.destroy();
+    if (trendChartInst) trendChartInst.destroy();
+    if (dailyChartInst) dailyChartInst.destroy();
+    if (budgetChartInst) budgetChartInst.destroy();
+    if (weekdayChartInst) weekdayChartInst.destroy();
+    if (momChartInst) momChartInst.destroy();
+  }
+
+  // ────────── Export CSV ──────────
+  function exportCSV() {
+    const totalInv = parseFloat(document.getElementById('totalInventoryInput').value) || 0;
+    const header = 'index,캠페인 템플릿,누적 노출수,매체집행금액,CPM,총 인벤토리,잔여 인벤토리,소진율(%),예상 소진일';
+    const dayCount = (() => {
+      const filtered = applyFilters(rawData);
+      const dates = filtered.map(r=>r.date).filter(Boolean).sort();
+      if (dates.length < 2) return 1;
+      const diff = (new Date(dates[dates.length-1]) - new Date(dates[0])) / 86400000 + 1;
+      return diff > 0 ? diff : 1;
+    })();
+    const rows = tableCache.map(({ key, g, cpm, burnRate, remaining, estDaysLeft }) => {
+      return [
+        key,
+        '"' + Array.from(g.campaigns).join('; ') + '"',
+        g.totalImpression,
+        g.totalBudget,
+        cpm.toFixed(0),
+        totalInv || '-',
+        remaining !== null ? remaining : '-',
+        burnRate !== null ? burnRate.toFixed(1) : '-',
+        estDaysLeft !== null ? estDaysLeft + '일' : '-'
+      ].join(',');
+    });
+    const blob = new Blob(['\uFEFF' + [header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'ad_inventory_result.csv'; a.click();
+    showToast('CSV 파일이 저장되었습니다.', 'ok');
+  }
+
+  // ────────── Helpers ──────────
+  function fmtNum(n) { return Math.round(n).toLocaleString('ko-KR'); }
+  function fmtMoney(n) {
+    if (n >= 1e8) return (n/1e8).toFixed(1) + '억원';
+    if (n >= 1e4) return Math.round(n/1e4).toLocaleString() + '만원';
+    return Math.round(n).toLocaleString() + '원';
+  }
+
+  function showToast(msg, type = 'ok') {
+    const t = document.getElementById('toast');
+    const c = type === 'ok' ? '#10b981' : type === 'warn' ? '#f59e0b' : '#ef4444';
+    t.style.borderColor = c;
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+</script>
+</body>
+</html>
